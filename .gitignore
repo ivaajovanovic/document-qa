@@ -1,0 +1,21 @@
+# env
+.env
+
+# data - lokalno, ne ide na git
+data/
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# chroma - baza se gradi lokalno
+chroma_db/
+
+# jupyter checkpoints
+.ipynb_checkpoints/
+
+# ide
+.vscode/
+.idea/
