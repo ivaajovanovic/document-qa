@@ -6,10 +6,16 @@ authors = [
     {name = "Iva"}
 ]
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<4.0.0"
 dependencies = [
+    "pymupdf (>=1.27.2.3,<2.0.0.0)",
+    "langchain-text-splitters (>=1.1.2,<2.0.0)",
+    "chromadb (>=1.5.9,<2.0.0)",
+    "docling (>=2.96.0,<3.0.0)"
 ]
 
+[tool.poetry]
+package-mode = false
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
