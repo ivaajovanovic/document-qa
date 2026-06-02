@@ -4,6 +4,10 @@
 # data - lokalno, ne ide na git
 data/
 
+results/
+
+scripts/
+
 # python
 __pycache__/
 *.pyc
@@ -19,7 +23,3 @@ chroma_db/
 # ide
 .vscode/
 .idea/
-
-
-data/processed/
-scripts/
