@@ -1,0 +1,63 @@
+{
+  "indexes": [
+    {
+      "id": "idx_chunk256",
+      "chunk_size": 256,
+      "processed_dir": "./data/processed_256",
+      "description": "All 20 papers, chunk_size=256"
+    },
+    {
+      "id": "idx_chunk128",
+      "chunk_size": 128,
+      "processed_dir": "./data/processed_128",
+      "description": "All 20 papers, chunk_size=128"
+    }
+  ],
+  "configs": [
+    {
+      "id": "config_256_k10_rrf60",
+      "index_id": "idx_chunk256",
+      "chunk_size": 256,
+      "top_k": 10,
+      "rrf_k": 60,
+      "context_offset": 150,
+      "description": "Best config from ablation study"
+    },
+    {
+      "id": "config_128_k5_rrf60",
+      "index_id": "idx_chunk128",
+      "chunk_size": 128,
+      "top_k": 5,
+      "rrf_k": 60,
+      "context_offset": 64,
+      "description": "Smaller chunks, less context"
+    },
+    {
+      "id": "config_128_k10_rrf60",
+      "index_id": "idx_chunk128",
+      "chunk_size": 128,
+      "top_k": 10,
+      "rrf_k": 60,
+      "context_offset": 64,
+      "description": "Smaller chunks, more retrieved"
+    },
+    {
+      "id": "config_256_k5_rrf60",
+      "index_id": "idx_chunk256",
+      "chunk_size": 256,
+      "top_k": 5,
+      "rrf_k": 60,
+      "context_offset": 150,
+      "description": "Best chunk size, fewer retrieved"
+    },
+    {
+      "id": "config_256_k10_rrf20",
+      "index_id": "idx_chunk256",
+      "chunk_size": 256,
+      "top_k": 10,
+      "rrf_k": 20,
+      "context_offset": 150,
+      "description": "Aggressive RRF, favors top-ranked"
+    }
+  ]
+}

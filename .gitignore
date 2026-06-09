@@ -6,6 +6,8 @@ data/
 
 results/
 
+rag/evaluate_stari.py
+
 scripts/
 
 # python
@@ -14,8 +16,7 @@ __pycache__/
 *.pyo
 .venv/
 
-# chroma - baza se gradi lokalno
-chroma_db/
+
 
 # jupyter checkpoints
 .ipynb_checkpoints/
@@ -23,3 +24,4 @@ chroma_db/
 # ide
 .vscode/
 .idea/
+

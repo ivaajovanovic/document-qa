@@ -26,7 +26,7 @@ def ingest_pdf(pdf_path: str) -> list[dict]:
 
 def run_pipeline(
     data_dir: str = "./data/raw/arxiv_papers",
-    output_dir: str = "./data/processed"
+    output_dir="./data/processed_128"
 ):
     """
     Runs ingestion pipeline for all PDFs and saves chunks as JSON.
