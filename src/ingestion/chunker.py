@@ -27,8 +27,8 @@ def chunk_text(pages: list[dict], metadata: dict) -> list[dict]:
             - metadata: paper metadata + chunk_index + page_num + char positions
     """
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=128,
-        chunk_overlap=13,
+        chunk_size=256,
+        chunk_overlap=28,
     )
 
     chunks = []
