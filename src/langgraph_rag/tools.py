@@ -53,6 +53,24 @@ def format_chunks(chunks: list[dict]) -> str:
     return "\n\n".join(results)
 
 
+def filter_papers_by_year(papers: list[dict], before_int: int, after_int: int, exact_int: int) -> list[dict]:
+    """Helper — filter papers by year constraints."""
+    filtered = []
+    for p in papers:
+        try:
+            year = int(p.get("year", 0))
+        except (ValueError, TypeError):
+            continue
+        if exact_int > 0 and year != exact_int:
+            continue
+        if before_int > 0 and year >= before_int:
+            continue
+        if after_int > 0 and year <= after_int:
+            continue
+        filtered.append(p)
+    return filtered
+
+
 @tool
 def search_papers(query: str) -> str:
     """
@@ -76,41 +94,41 @@ def search_papers(query: str) -> str:
 
 
 @tool
-def search_papers_by_year(query: str, before: str, after: str) -> str:
+def search_papers_by_year(query: str, before: str, after: str, exact: str) -> str:
     """
     Search academic papers filtered by publication year.
 
     Args:
         query: The search query about paper content.
-        before: Only include papers published before this year. Use "0" for no upper limit.
-        after: Only include papers published after this year. Use "0" for no lower limit.
+        before: Exclude papers published in this year or later. Use "0" for no upper limit.
+                Example: before="2018" returns papers from 2017 and earlier.
+        after: Exclude papers published in this year or earlier. Use "0" for no lower limit.
+               Example: after="2018" returns papers from 2019 and later.
+        exact: Return only papers from this exact year. Use "0" for no exact filter.
+               Example: exact="2019" returns only papers from 2019.
+               When exact is set, before and after are ignored.
 
-    Example: To find papers before 2018, use before="2018", after="0".
+    Examples:
+        Papers before 2018: before="2018", after="0", exact="0"
+        Papers after 2020: before="0", after="2020", exact="0"
+        Papers from exactly 2019: exact="2019", before="0", after="0"
     """
     try:
         before_int = int(before) if before else 0
         after_int = int(after) if after else 0
+        exact_int = int(exact) if exact else 0
     except (ValueError, TypeError):
         before_int = 0
         after_int = 0
+        exact_int = 0
 
     try:
         papers = load_all_extracted()
-
-        filtered = []
-        for p in papers:
-            try:
-                year = int(p.get("year", 0))
-            except (ValueError, TypeError):
-                continue
-            if before_int > 0 and year >= before_int:
-                continue
-            if after_int > 0 and year <= after_int:
-                continue
-            filtered.append(p["arxiv_id"])
+        filtered_papers = filter_papers_by_year(papers, before_int, after_int, exact_int)
+        filtered = [p["arxiv_id"] for p in filtered_papers]
 
         if not filtered:
-            return f"No papers found matching year filter (before={before}, after={after})."
+            return f"No papers found matching year filter (before={before}, after={after}, exact={exact})."
 
         chunks = search_with_filter(query, filtered)
         paper_list = ", ".join(filtered)
@@ -186,47 +204,49 @@ def search_papers_by_author(query: str, author: str) -> str:
 
 
 @tool
-def list_papers_metadata(company: str, year_before: str, year_after: str) -> str:
+def list_papers_metadata(company: str, year_before: str, year_after: str, year_exact: str) -> str:
     """
     List papers matching metadata filters without doing RAG search.
     Useful to see which papers are available before searching.
 
     Args:
         company: Filter by company. Use empty string for no filter.
-        year_before: Filter papers before this year. Use "0" for no filter.
-        year_after: Filter papers after this year. Use "0" for no filter.
+        year_before: Exclude papers published in this year or later. Use "0" for no filter.
+                     Example: year_before="2020" returns papers from 2019 and earlier.
+        year_after: Exclude papers published in this year or earlier. Use "0" for no filter.
+                    Example: year_after="2018" returns papers from 2019 and later.
+        year_exact: Return only papers from this exact year. Use "0" for no filter.
+                    Example: year_exact="2019" returns only papers from 2019.
+                    When set, year_before and year_after are ignored.
+
+    Examples:
+        Papers from exactly 2019: year_exact="2019", year_before="0", year_after="0"
+        Papers before 2020: year_before="2020", year_after="0", year_exact="0"
     """
     try:
         year_before_int = int(year_before) if year_before else 0
         year_after_int = int(year_after) if year_after else 0
+        year_exact_int = int(year_exact) if year_exact else 0
     except (ValueError, TypeError):
         year_before_int = 0
         year_after_int = 0
+        year_exact_int = 0
 
     try:
         papers = load_all_extracted()
+        filtered_papers = filter_papers_by_year(papers, year_before_int, year_after_int, year_exact_int)
 
-        filtered = []
-        for p in papers:
-            try:
-                year = int(p.get("year", 0))
-            except (ValueError, TypeError):
-                continue
-            if year_before_int > 0 and year >= year_before_int:
-                continue
-            if year_after_int > 0 and year <= year_after_int:
-                continue
-            if company:
-                companies = [c.lower() for c in p.get("companies", [])]
-                if not any(company.lower() in c for c in companies):
-                    continue
-            filtered.append(p)
+        if company:
+            filtered_papers = [
+                p for p in filtered_papers
+                if any(company.lower() in c.lower() for c in p.get("companies", []))
+            ]
 
-        if not filtered:
+        if not filtered_papers:
             return "No papers found matching filters."
 
         results = []
-        for p in filtered:
+        for p in filtered_papers:
             results.append(
                 f"- {p['title']} ({p['arxiv_id']}, {p['year']}) "
                 f"| Companies: {', '.join(p.get('companies', []))}"

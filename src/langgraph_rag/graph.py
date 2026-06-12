@@ -1,9 +1,12 @@
 import logging
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
+from langgraph.checkpoint.sqlite import SqliteSaver
 from src.langgraph_rag.state import InputState, RAGState
 from src.langgraph_rag.nodes import (
     parse_query_node,
+    decompose_query_node,
+    execute_sub_queries_node,
     update_config_node,
     agent_node,
     tools_generate_node,
@@ -27,13 +30,17 @@ def route_after_parse(state: RAGState) -> str:
     if content.startswith("/config"):
         return "update_config"
 
+    return "decompose_query"
+
+
+def route_after_decompose(state: RAGState) -> str:
+    sub_queries = state.get("sub_queries", [])
+    if len(sub_queries) > 1:
+        return "execute_sub_queries"
     return "agent"
 
 
 def route_after_agent(state: RAGState) -> str:
-    """
-    After agent — if tool_calls exist go to tools, else generate directly.
-    """
     last_message = state["messages"][-1]
     if hasattr(last_message, "tool_calls") and last_message.tool_calls:
         return "tools"
@@ -41,17 +48,11 @@ def route_after_agent(state: RAGState) -> str:
 
 
 def build_graph() -> StateGraph:
-    """
-    Build and compile the RAG chat graph.
-
-    Graph structure:
-        START → parse_query → update_config → END
-                           ↘ agent → tools → tools_generate → END
-                                   ↘ tools_generate → END
-    """
     graph = StateGraph(RAGState, input=InputState)
 
     graph.add_node("parse_query", parse_query_node)
+    graph.add_node("decompose_query", decompose_query_node)
+    graph.add_node("execute_sub_queries", execute_sub_queries_node)
     graph.add_node("update_config", update_config_node)
     graph.add_node("agent", agent_node)
     graph.add_node("tools", ToolNode(TOOLS))
@@ -64,11 +65,22 @@ def build_graph() -> StateGraph:
         route_after_parse,
         {
             "update_config": "update_config",
-            "agent": "agent",
+            "decompose_query": "decompose_query",
         }
     )
 
     graph.add_edge("update_config", END)
+
+    graph.add_conditional_edges(
+        "decompose_query",
+        route_after_decompose,
+        {
+            "execute_sub_queries": "execute_sub_queries",
+            "agent": "agent",
+        }
+    )
+
+    graph.add_edge("execute_sub_queries", "tools_generate")
 
     graph.add_conditional_edges(
         "agent",
@@ -81,8 +93,8 @@ def build_graph() -> StateGraph:
     graph.add_edge("tools", "tools_generate")
     graph.add_edge("tools_generate", END)
 
-    return graph.compile()
+    checkpointer = SqliteSaver.from_conn_string("./data/cache/chat_memory.db")
+    return graph.compile(checkpointer=checkpointer)
 
 
-# singleton
 rag_graph = build_graph()

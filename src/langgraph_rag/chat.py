@@ -16,7 +16,17 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIG = "config_256_k10_rrf60"
 
-HELP_TEXT = """
+
+def get_help_text() -> str:
+    with open("./experiments/configs_langgraph.json") as f:
+        configs = json.load(f)["configs"]
+
+    config_lines = "\n".join(
+        f"  {c['id']}  — {c['description']}"
+        for c in configs
+    )
+
+    return f"""
 === RAG Chat ===
 Commands:
   /config <config_id>  — change retrieval configuration
@@ -26,26 +36,20 @@ Commands:
   /exit                — exit chat
 
 Available configs:
-  config_256_k10_rrf60  — Best config (chunk=256, top_k=10, rrf_k=60)
-  config_128_k5_rrf60   — Smaller chunks (chunk=128, top_k=5, rrf_k=60)
-  config_128_k10_rrf60  — Smaller chunks, more retrieved
-  config_256_k5_rrf60   — Fewer retrieved (chunk=256, top_k=5)
-  config_256_k10_rrf20  — Aggressive RRF (chunk=256, top_k=10, rrf_k=20)
+{config_lines}
 """
 
 
 def run_chat() -> None:
     """Run interactive RAG chat in terminal."""
 
-    print(HELP_TEXT)
+    print(get_help_text())
     print(f"Active config: {DEFAULT_CONFIG}")
     print("="*40)
 
-    # thread_id za checkpointer — pamti kontekst sesije
     thread_id = str(uuid.uuid4())
     graph_config = {"configurable": {"thread_id": thread_id}}
 
-    # initialize state
     state: RAGState = {
         "messages": [],
         "config_id": DEFAULT_CONFIG,
@@ -69,7 +73,7 @@ def run_chat() -> None:
             break
 
         if user_input.lower() == "/help":
-            print(HELP_TEXT)
+            print(get_help_text())
             continue
 
         if user_input.lower() == "/configs":
@@ -91,10 +95,8 @@ def run_chat() -> None:
                     print(f"     {c['text'][:100]}...")
             continue
 
-        # add user message to state
         state["messages"].append(HumanMessage(content=user_input))
 
-        # run graph sa checkpointer configom
         try:
             state = rag_graph.invoke(state, config=graph_config)
         except Exception as e:
@@ -102,7 +104,6 @@ def run_chat() -> None:
             logger.error(f"Graph invocation failed: {e}")
             continue
 
-        # print last AI message
         last_ai = next(
             (m for m in reversed(state["messages"]) if isinstance(m, AIMessage)),
             None
