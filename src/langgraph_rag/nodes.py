@@ -13,6 +13,9 @@ logger = logging.getLogger(__name__)
 
 _agent = None
 
+# Tools koji vraćaju plain text metadata (ne RAG chunkove)
+METADATA_TOOLS = {"list_papers_metadata", "get_paper_authors", "search_papers_by_year"}
+
 
 def get_agent():
     global _agent
@@ -26,7 +29,6 @@ def get_agent():
 
 
 def _get_chat_history(state: RAGState, n: int = 6) -> str:
-    """Extract last n messages as formatted chat history string."""
     history_messages = state["messages"][:-1][-n:]
     history = ""
     for msg in history_messages:
@@ -38,12 +40,10 @@ def _get_chat_history(state: RAGState, n: int = 6) -> str:
 
 
 def parse_query_node(state: RAGState) -> RAGState:
-    """Decide if the last message is a /config command or a question."""
     if not state.get("config_id"):
-        state["config_id"] = "config_256_k10_rrf60"
+        state["config_id"] = "config_multimodal_k10_rrf60"
 
     last_message = state["messages"][-1]
-
     content = last_message.content
     if isinstance(content, list):
         content = " ".join(
@@ -64,11 +64,6 @@ def parse_query_node(state: RAGState) -> RAGState:
 
 
 def decompose_query_node(state: RAGState) -> RAGState:
-    """
-    History-aware query rewriting and decomposition:
-    1. Resolve pronouns and references using chat history
-    2. Decompose into sub-queries if comparative or multi-document question
-    """
     last_message = state["messages"][-1]
     content = last_message.content
     if isinstance(content, list):
@@ -97,7 +92,9 @@ Rules:
 - Keep queries short and specific (3-6 words)
 - Use paper names or technical terms when possible
 - For comparative questions return at least 2 queries
-- Example: "Compare BERT and Transformer attention" → ["BERT bidirectional attention", "Transformer self-attention Vaswani 2017"]
+- IMPORTANT: For questions about publication year, author names, or company/institution names — return EXACTLY 1 query, do not decompose. These are metadata filter questions.
+- Examples of metadata questions (return 1 query): "Which papers were published in 2017?", "What did Vaswani propose?", "Which papers are from Google?", "Papers before 2020"
+- Example of decomposable question: "Compare BERT and Transformer attention" → ["BERT bidirectional attention", "Transformer self-attention Vaswani 2017"]
 
 Respond with ONLY a JSON array of strings:
 ["query1", "query2"]"""
@@ -112,7 +109,9 @@ Rules:
 - Keep queries short and specific (3-6 words)
 - Use paper names or technical terms when possible
 - For comparative questions return at least 2 queries
-- Example: "Compare BERT and Transformer attention" → ["BERT bidirectional attention", "Transformer self-attention Vaswani 2017"]
+- IMPORTANT: For questions about publication year, author names, or company/institution names — return EXACTLY 1 query, do not decompose. These are metadata filter questions that need special tools.
+- Examples of metadata questions (return 1 query): "Which papers were published in 2017?", "What did Vaswani propose?", "Which papers are from Google?", "Papers before 2020", "Papers after 2021"
+- Example of decomposable question: "Compare BERT and Transformer attention" → ["BERT bidirectional attention", "Transformer self-attention Vaswani 2017"]
 
 Respond with ONLY a JSON array of strings:
 ["query1", "query2"]"""
@@ -140,7 +139,6 @@ Respond with ONLY a JSON array of strings:
 
 
 def retrieve_node(state: RAGState) -> RAGState:
-    """Retrieve relevant chunks for the last question using active config."""
     last_message = state["messages"][-1]
     query = last_message.content.strip()
 
@@ -161,7 +159,6 @@ def retrieve_node(state: RAGState) -> RAGState:
 
 
 def generate_node(state: RAGState) -> RAGState:
-    """Generate answer based on retrieved chunks."""
     if state.get("error") or not state.get("retrieved_chunks"):
         state["messages"] = [AIMessage(content=f"Error: {state.get('error', 'No chunks retrieved')}")]
         return state
@@ -186,7 +183,6 @@ def generate_node(state: RAGState) -> RAGState:
 
 
 def agent_node(state: RAGState) -> RAGState:
-    """Groq agent node — LLM decides which tool to call."""
     max_retries = 3
 
     for attempt in range(max_retries):
@@ -199,7 +195,7 @@ ALWAYS use search_papers tool to answer questions about paper content.
 Tool selection guide:
 - COMPANIES or INSTITUTIONS → use search_papers_by_company
 - PERSON NAMES → use search_papers_by_author
-- YEARS or TIME PERIODS → use search_papers_by_year or list_papers_metadata
+- YEARS or TIME PERIODS → use list_papers_metadata or search_papers_by_year
 - GENERAL CONTENT → use search_papers
 - AUTHORS OF A PAPER → use get_paper_authors
 
@@ -242,6 +238,44 @@ Do NOT use tools for greetings.""")
     return state
 
 
+def update_config_node(state: RAGState) -> RAGState:
+    if state.get("error"):
+        state["messages"] = [AIMessage(content=f"Error: {state['error']}")]
+    else:
+        config_id = state["config_id"]
+        try:
+            config = load_config(config_id)
+            msg = (
+                f"Config updated to: **{config_id}**\n"
+                f"- chunk_size: {config['chunk_size']}\n"
+                f"- top_k: {config['top_k']}\n"
+                f"- rrf_k: {config['rrf_k']}\n"
+                f"- context_offset: {config['context_offset']}\n"
+                f"- {config['description']}"
+            )
+        except ValueError as e:
+            msg = str(e)
+        state["messages"] = [AIMessage(content=msg)]
+
+    return state
+
+
+def direct_answer_node(state: RAGState) -> RAGState:
+    tool_result = ""
+    for msg in reversed(state["messages"]):
+        if hasattr(msg, "type") and msg.type == "tool":
+            tool_result = msg.content
+            break
+
+    if not tool_result or tool_result.startswith("No papers found") or tool_result.startswith("Error"):
+        state["messages"] = [AIMessage(content="I could not find sufficient evidence in this paper collection to answer this question.")]
+        return state
+
+    state["answer"] = tool_result
+    state["messages"] = [AIMessage(content=tool_result)]
+    return state
+
+
 def tools_generate_node(state: RAGState) -> RAGState:
     try:
         tool_results = []
@@ -269,7 +303,6 @@ def tools_generate_node(state: RAGState) -> RAGState:
         context = "\n\n".join(tool_results)
         history = _get_chat_history(state)
 
-        # grupišu sources po paperu
         sources_dict = {}
         for result in tool_results:
             for line in result.split("\n"):
@@ -281,11 +314,7 @@ def tools_generate_node(state: RAGState) -> RAGState:
                     if page not in sources_dict[arxiv_id]["pages"]:
                         sources_dict[arxiv_id]["pages"].append(page)
 
-        # formatiraj kao "Title (arxiv_id), pages: 1, 3, 5"
-        sources = []
-        for arxiv_id, info in sources_dict.items():
-            pages = ", ".join(sorted(info["pages"], key=int))
-            sources.append(f"{info['title']} ({arxiv_id}), pages: {pages}")
+        available_ids = list(sources_dict.keys())
 
         llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
 
@@ -307,8 +336,11 @@ Rules:
 - For comparison questions, explicitly contrast the two approaches point by point
 - If the retrieved context does not contain sufficient evidence to answer the question, respond with:
   "I could not find sufficient evidence in this paper collection to answer this question."
-- Do NOT add sources at the end — they will be added automatically
-- Do NOT speculate or add information not present in the context"""
+- Do NOT speculate or add information not present in the context
+- At the very end of your answer, on a new line, write USED_SOURCES: followed by a pipe-separated list of arxiv IDs and the exact pages you used
+- Format: USED_SOURCES: 1706.03762:1,5 | 1810.04805:2,7
+- Available arxiv IDs: {', '.join(available_ids)}
+- If you could not find sufficient evidence, write USED_SOURCES: none"""
         else:
             prompt = f"""You are a research assistant specializing in NLP and deep learning papers.
 Answer ONLY based on the retrieved context below. Do NOT use any external knowledge or training data.
@@ -324,13 +356,41 @@ Rules:
 - For comparison questions, explicitly contrast the two approaches point by point
 - If the retrieved context does not contain sufficient evidence to answer the question, respond with:
   "I could not find sufficient evidence in this paper collection to answer this question."
-- Do NOT add sources at the end — they will be added automatically
-- Do NOT speculate or add information not present in the context"""
+- Do NOT speculate or add information not present in the context
+- At the very end of your answer, on a new line, write USED_SOURCES: followed by a pipe-separated list of arxiv IDs and the exact pages you used
+- Format: USED_SOURCES: 1706.03762:1,5 | 1810.04805:2,7
+- Available arxiv IDs: {', '.join(available_ids)}
+- If you could not find sufficient evidence, write USED_SOURCES: none"""
 
         response = llm.invoke(prompt)
         answer = response.content.strip()
 
-        # dodaj sources samo ako odgovor nije "not found"
+        used_ids = []
+        used_sources_match = re.search(r'USED_SOURCES:\s*(.+?)$', answer, re.MULTILINE)
+        if used_sources_match:
+            raw = used_sources_match.group(1).strip()
+            answer = answer[:used_sources_match.start()].strip()
+            if raw.lower() != "none":
+                for entry in raw.split("|"):
+                    entry = entry.strip()
+                    if ":" in entry:
+                        arxiv_id, pages_str = entry.split(":", 1)
+                        arxiv_id = arxiv_id.strip()
+                        pages = [p.strip() for p in pages_str.split(",")]
+                        if arxiv_id in sources_dict:
+                            used_ids.append(arxiv_id)
+                            sources_dict[arxiv_id]["pages"] = pages
+
+        sources = []
+        seen_ids = set()
+        for arxiv_id in used_ids:
+            if arxiv_id in seen_ids:
+                continue
+            seen_ids.add(arxiv_id)
+            info = sources_dict[arxiv_id]
+            pages = ", ".join(info["pages"])
+            sources.append(f"{info['title']} ({arxiv_id}), pages: {pages}")
+
         not_found_phrases = [
             "could not find sufficient evidence",
             "does not contain enough information",
@@ -355,34 +415,7 @@ Rules:
     return state
 
 
-def update_config_node(state: RAGState) -> RAGState:
-    """Confirm config update and add message to conversation."""
-    if state.get("error"):
-        state["messages"] = [AIMessage(content=f"Error: {state['error']}")]
-    else:
-        config_id = state["config_id"]
-        try:
-            config = load_config(config_id)
-            msg = (
-                f"Config updated to: **{config_id}**\n"
-                f"- chunk_size: {config['chunk_size']}\n"
-                f"- top_k: {config['top_k']}\n"
-                f"- rrf_k: {config['rrf_k']}\n"
-                f"- context_offset: {config['context_offset']}\n"
-                f"- {config['description']}"
-            )
-        except ValueError as e:
-            msg = str(e)
-        state["messages"] = [AIMessage(content=msg)]
-
-    return state
-
-
 def execute_sub_queries_node(state: RAGState) -> RAGState:
-    """
-    Directly execute search_papers for each sub_query without going through agent.
-    Bypasses LLM tool calling to avoid format bugs with complex queries.
-    """
     from src.langgraph_rag.tools import search_papers
     from langchain_core.messages import ToolMessage
 

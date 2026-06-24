@@ -7,11 +7,10 @@ from src.langgraph_rag.retriever_utils import get_retriever, load_config
 logger = logging.getLogger(__name__)
 
 EXTRACTED_DIR = "./data/extracted_2"
-DEFAULT_CONFIG_ID = "config_256_k10_rrf60"
+DEFAULT_CONFIG_ID = "config_multimodal_k10_rrf60"
 
 
 def load_all_extracted() -> list[dict]:
-    """Load all extracted paper metadata."""
     papers = []
     for filename in os.listdir(EXTRACTED_DIR):
         if not filename.endswith("_extraction.json"):
@@ -28,7 +27,6 @@ def load_all_extracted() -> list[dict]:
 
 
 def search_with_filter(query: str, arxiv_ids: list[str], config_id: str = DEFAULT_CONFIG_ID) -> list[dict]:
-    """Search FAISS but only return chunks from filtered arxiv_ids."""
     try:
         config = load_config(config_id)
         retriever = get_retriever(config)
@@ -41,7 +39,6 @@ def search_with_filter(query: str, arxiv_ids: list[str], config_id: str = DEFAUL
 
 
 def format_chunks(chunks: list[dict]) -> str:
-    """Format chunks as readable string."""
     if not chunks:
         return "No relevant content found."
     results = []
@@ -53,8 +50,19 @@ def format_chunks(chunks: list[dict]) -> str:
     return "\n\n".join(results)
 
 
+def format_paper_list(papers: list[dict]) -> str:
+    if not papers:
+        return "No papers found matching filters."
+    results = []
+    for p in papers:
+        results.append(
+            f"- {p['title']} ({p['arxiv_id']}, {p['year']}) "
+            f"| Companies: {', '.join(p.get('companies', []))}"
+        )
+    return "\n".join(results)
+
+
 def filter_papers_by_year(papers: list[dict], before_int: int, after_int: int, exact_int: int) -> list[dict]:
-    """Helper — filter papers by year constraints."""
     filtered = []
     for p in papers:
         try:
@@ -96,22 +104,23 @@ def search_papers(query: str) -> str:
 @tool
 def search_papers_by_year(query: str, before: str, after: str, exact: str) -> str:
     """
-    Search academic papers filtered by publication year.
+    List academic papers filtered by publication year.
+    Returns a list of matching papers with their metadata.
+    Use this when the user asks which papers were published before/after/in a specific year.
 
     Args:
-        query: The search query about paper content.
+        query: Ignored — kept for compatibility. Pass empty string.
         before: Exclude papers published in this year or later. Use "0" for no upper limit.
-                Example: before="2018" returns papers from 2017 and earlier.
+                Example: before="2020" returns papers from 2019 and earlier.
         after: Exclude papers published in this year or earlier. Use "0" for no lower limit.
                Example: after="2018" returns papers from 2019 and later.
         exact: Return only papers from this exact year. Use "0" for no exact filter.
                Example: exact="2019" returns only papers from 2019.
-               When exact is set, before and after are ignored.
 
     Examples:
-        Papers before 2018: before="2018", after="0", exact="0"
+        Papers before 2020: before="2020", after="0", exact="0"
         Papers after 2020: before="0", after="2020", exact="0"
-        Papers from exactly 2019: exact="2019", before="0", after="0"
+        Papers from exactly 2017: exact="2017", before="0", after="0"
     """
     try:
         before_int = int(before) if before else 0
@@ -125,14 +134,11 @@ def search_papers_by_year(query: str, before: str, after: str, exact: str) -> st
     try:
         papers = load_all_extracted()
         filtered_papers = filter_papers_by_year(papers, before_int, after_int, exact_int)
-        filtered = [p["arxiv_id"] for p in filtered_papers]
 
-        if not filtered:
+        if not filtered_papers:
             return f"No papers found matching year filter (before={before}, after={after}, exact={exact})."
 
-        chunks = search_with_filter(query, filtered)
-        paper_list = ", ".join(filtered)
-        return f"Papers matching year filter: {paper_list}\n\n{format_chunks(chunks)}"
+        return format_paper_list(filtered_papers)
 
     except Exception as e:
         logger.error(f"search_papers_by_year failed: {e}")
@@ -212,12 +218,8 @@ def list_papers_metadata(company: str, year_before: str, year_after: str, year_e
     Args:
         company: Filter by company. Use empty string for no filter.
         year_before: Exclude papers published in this year or later. Use "0" for no filter.
-                     Example: year_before="2020" returns papers from 2019 and earlier.
         year_after: Exclude papers published in this year or earlier. Use "0" for no filter.
-                    Example: year_after="2018" returns papers from 2019 and later.
         year_exact: Return only papers from this exact year. Use "0" for no filter.
-                    Example: year_exact="2019" returns only papers from 2019.
-                    When set, year_before and year_after are ignored.
 
     Examples:
         Papers from exactly 2019: year_exact="2019", year_before="0", year_after="0"
@@ -242,16 +244,7 @@ def list_papers_metadata(company: str, year_before: str, year_after: str, year_e
                 if any(company.lower() in c.lower() for c in p.get("companies", []))
             ]
 
-        if not filtered_papers:
-            return "No papers found matching filters."
-
-        results = []
-        for p in filtered_papers:
-            results.append(
-                f"- {p['title']} ({p['arxiv_id']}, {p['year']}) "
-                f"| Companies: {', '.join(p.get('companies', []))}"
-            )
-        return "\n".join(results)
+        return format_paper_list(filtered_papers)
 
     except Exception as e:
         logger.error(f"list_papers_metadata failed: {e}")

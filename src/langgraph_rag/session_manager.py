@@ -19,27 +19,44 @@ def _save_sessions(sessions: dict):
 
 
 def create_session(thread_id: str, first_question: str):
-    """Create new session with auto-generated name from first question."""
     sessions = _load_sessions()
     name = " ".join(first_question.split()[:5])
     sessions[thread_id] = {
         "name": name,
         "created_at": datetime.now().isoformat(),
         "last_updated": datetime.now().isoformat(),
+        "message_images": {},  # message_index -> [image_paths]
     }
     _save_sessions(sessions)
 
 
 def update_session(thread_id: str):
-    """Update last_updated timestamp."""
     sessions = _load_sessions()
     if thread_id in sessions:
         sessions[thread_id]["last_updated"] = datetime.now().isoformat()
         _save_sessions(sessions)
 
 
+def save_message_images(thread_id: str, message_index: int, image_paths: list[str]):
+    """Save image paths for a specific message index."""
+    sessions = _load_sessions()
+    if thread_id not in sessions:
+        return
+    if "message_images" not in sessions[thread_id]:
+        sessions[thread_id]["message_images"] = {}
+    sessions[thread_id]["message_images"][str(message_index)] = image_paths
+    _save_sessions(sessions)
+
+
+def get_message_images(thread_id: str) -> dict:
+    """Get all message image paths for a session. Returns {message_index: [paths]}."""
+    sessions = _load_sessions()
+    if thread_id not in sessions:
+        return {}
+    return sessions[thread_id].get("message_images", {})
+
+
 def get_all_sessions() -> list[dict]:
-    """Return all sessions sorted by last_updated descending."""
     sessions = _load_sessions()
     result = []
     for thread_id, meta in sessions.items():
@@ -53,7 +70,6 @@ def get_all_sessions() -> list[dict]:
 
 
 def delete_session(thread_id: str):
-    """Delete session metadata (LangGraph checkpoint ostaje u SQLite)."""
     sessions = _load_sessions()
     if thread_id in sessions:
         del sessions[thread_id]
