@@ -6,7 +6,13 @@ data/
 
 results/
 
-scripts/
+# scripts - ignore only test scripts, keep build/ingestion scripts
+scripts/test_*.py
+scripts/generate_qa.py
+
+# runtime artifacts
+.deepeval/
+.langgraph_api/
 
 # python
 __pycache__/
@@ -14,12 +20,20 @@ __pycache__/
 *.pyo
 .venv/
 
-# chroma - baza se gradi lokalno
-chroma_db/
-
 # jupyter checkpoints
 .ipynb_checkpoints/
 
 # ide
 .vscode/
 .idea/
+
+# SQLite checkpoints
+*.db
+data/cache/chat_memory.db
+
+# Streamlit
+.streamlit/
+
+# Poetry lock (optional - uncomment if you want local lock)
+# poetry.lock
+

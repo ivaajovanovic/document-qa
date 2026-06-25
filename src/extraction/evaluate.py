@@ -39,10 +39,12 @@ def evidence_in_text(evidence: str, text: str, threshold: float = 0.7) -> bool:
 
 
 def exact_match_title(extracted: str, expected: str) -> bool:
+    """Case-insensitive exact title comparison."""
     return extracted.strip().lower() == expected.strip().lower()
 
 
 def exact_match_year(extracted: str, expected: str) -> bool:
+    """Exact year comparison after whitespace normalization."""
     return extracted.strip() == expected.strip()
 
 
@@ -125,6 +127,12 @@ def evaluate_extraction(
     metadata_dir: str = "./data/raw/arxiv_papers",
     output_path: str = "./results/evaluation2.json"
 ):
+    """
+    Evaluate extraction quality against metadata and paper text evidence.
+
+    This routine computes exact/partial matching metrics and a simple
+    hallucination report, then writes an aggregated JSON summary.
+    """
     os.makedirs("./results", exist_ok=True)
     results = []
 
@@ -148,6 +156,7 @@ def evaluate_extraction(
         chunks_path = os.path.join(processed_dir, f"{arxiv_id}_chunks.json")
         with open(chunks_path, "r", encoding="utf-8") as f:
             chunks = json.load(f)
+        # Concatenate chunk text to form reference corpus for evidence checks.
         full_text = " ".join(chunk["text"] for chunk in chunks)
 
         result = EvaluationResult(
@@ -171,6 +180,7 @@ def evaluate_extraction(
         )
 
     if results:
+        # Aggregate dataset-level metrics across all evaluated papers.
         summary = {
             "total": len(results),
             "title_match_rate": sum(r["title_match"] for r in results) / len(results),

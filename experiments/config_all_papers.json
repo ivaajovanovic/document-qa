@@ -1,0 +1,7 @@
+{
+  "chunk_size": 256,
+  "top_k": 10,
+  "rrf_k": 60,
+  "context_offset": 150,
+  "experiment_id": "exp_all_256_k10_rrf60"
+}

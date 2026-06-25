@@ -1,0 +1,54 @@
+{
+  "arxiv_id": "1706.03762",
+  "questions": [
+    "What is the Transformer architecture?",
+    "How does multi-head attention work?",
+    "What is positional encoding and why is it needed?",
+    "What tasks was the Transformer evaluated on?",
+    "How does scaled dot-product attention work?"
+  ],
+  "experiments": [
+    {
+      "id": "exp_001",
+      "chunk_size": 256,
+      "top_k": 5,
+      "rrf_k": 60,
+      "context_offset": 150
+    },
+    {
+      "id": "exp_002",
+      "chunk_size": 128,
+      "top_k": 5,
+      "rrf_k": 60,
+      "context_offset": 64
+    },
+    {
+      "id": "exp_003",
+      "chunk_size": 256,
+      "top_k": 10,
+      "rrf_k": 60,
+      "context_offset": 150
+    },
+    {
+      "id": "exp_004",
+      "chunk_size": 128,
+      "top_k": 10,
+      "rrf_k": 60,
+      "context_offset": 64
+    },
+    {
+      "id": "exp_005",
+      "chunk_size": 256,
+      "top_k": 5,
+      "rrf_k": 20,
+      "context_offset": 150
+    },
+    {
+      "id": "exp_006",
+      "chunk_size": 256,
+      "top_k": 5,
+      "rrf_k": 100,
+      "context_offset": 150
+    }
+  ]
+}

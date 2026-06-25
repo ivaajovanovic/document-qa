@@ -32,8 +32,16 @@ def run_extraction(
     output_dir: str = "./data/extracted_2"
 ):
     """
-    Runs information extraction for all papers and saves results as JSON.
-    Only paper text is sent to the LLM without any metadata hints.
+    Run extraction across all processed papers and persist JSON outputs.
+
+    Workflow:
+    1) Read ``*_chunks.json`` files from ``processed_dir``.
+    2) Merge chunk text into one document per paper.
+    3) Extract structured fields using the LLM client.
+    4) Save ``*_extraction.json`` files to ``output_dir``.
+
+    Note:
+        Existing output files are skipped, so interrupted runs can continue.
     """
     os.makedirs(output_dir, exist_ok=True)
     client = GroqClient()
@@ -51,6 +59,7 @@ def run_extraction(
 
         logger.info(f"Extracting: {arxiv_id}...")
         chunks_path = os.path.join(processed_dir, filename)
+        # Rebuild a single text blob used as extraction context.
         text = load_chunks(chunks_path)
 
         extraction = extract_paper_info(text, client)
@@ -62,6 +71,7 @@ def run_extraction(
         else:
             logger.error(f"  Failed to extract: {arxiv_id}")
 
+        # Conservative delay to reduce rate-limit issues on hosted APIs.
         time.sleep(65)
 
     logger.info("Done!")

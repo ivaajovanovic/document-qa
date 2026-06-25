@@ -12,6 +12,7 @@ def load_metadata(pdf_path: str) -> dict:
     Returns:
         Dict with metadata: arxiv_id, title, authors, year, categories.
     """
+    # Convention: metadata JSON sits next to the PDF with identical basename.
     json_path = pdf_path.replace(".pdf", ".json")
 
     if not os.path.exists(json_path):
