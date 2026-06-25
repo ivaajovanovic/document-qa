@@ -108,8 +108,7 @@ poetry run streamlit run frontend/app.py
 - `scripts/build_indexes.py` — build text retrieval indexes
 - `scripts/build_multimodal_index.py` — build multimodal index
 - `scripts/fetch_metadata.py` — fetch metadata for papers
-- `scripts/generate_qa.py` — generate Q&A pairs
-
+- 
 ## Configuration
 
 All retrieval configs are stored in `experiments/configs_langgraph.json`.
