@@ -1,0 +1,90 @@
+/* Main app background */
+.stApp {
+    background-color: #0f0f1a;
+}
+
+/* Sidebar styling */
+[data-testid="stSidebar"] {
+    background-color: #1a1a2e;
+    border-right: 1px solid #7c3aed;
+}
+
+/* Sidebar title */
+[data-testid="stSidebar"] h1 {
+    color: #a78bfa;
+    font-size: 1.4rem;
+}
+
+/* Sidebar subheader */
+[data-testid="stSidebar"] h2 {
+    color: #7c3aed;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+/* Sidebar buttons */
+[data-testid="stSidebar"] .stButton > button {
+    background-color: #2d1b69;
+    color: #e2d9f3;
+    border: 1px solid #7c3aed;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+[data-testid="stSidebar"] .stButton > button:hover {
+    background-color: #7c3aed;
+    color: white;
+    border-color: #a78bfa;
+}
+
+/* New chat button */
+[data-testid="stSidebar"] .stButton:first-of-type > button {
+    background-color: #7c3aed;
+    color: white;
+    font-weight: 600;
+    border: none;
+}
+
+[data-testid="stSidebar"] .stButton:first-of-type > button:hover {
+    background-color: #6d28d9;
+}
+
+/* Chat messages */
+[data-testid="stChatMessage"] {
+    background-color: #1a1a2e;
+    border-radius: 12px;
+    border: 1px solid #2d1b69;
+    margin-bottom: 8px;
+}
+
+/* Chat input */
+[data-testid="stChatInput"] {
+    background-color: #1a1a2e;
+    border: 1px solid #7c3aed;
+    border-radius: 12px;
+}
+
+/* Chat input send button */
+[data-testid="stChatInput"] button {
+    background-color: #7c3aed !important;
+    border-radius: 8px !important;
+    color: white !important;
+}
+
+/* Dividers */
+hr {
+    border-color: #2d1b69;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+    width: 6px;
+}
+::-webkit-scrollbar-track {
+    background: #0f0f1a;
+}
+::-webkit-scrollbar-thumb {
+    background: #7c3aed;
+    border-radius: 3px;
+}

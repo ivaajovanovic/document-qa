@@ -1,8 +1,20 @@
+"""Chat message rendering and user input handling.
+
+Manages the main chat interface: message history display, user input,
+RAG query submission, answer display, and retrieved figure visualization.
+"""
+
 import streamlit as st
-from api_client import send_message
+from ..api_client import send_message
 
 
 def render_chat(thread_id: str, config_id: str):
+    """Render chat interface with message history and input box.
+    
+    Args:
+        thread_id: Session ID for sending messages.
+        config_id: Retrieval config ID to use for this session.
+    """
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
@@ -51,6 +63,11 @@ def render_chat(thread_id: str, config_id: str):
 
 
 def _render_images(images: list[str]):
+    """Display retrieved figure images in a compact grid layout.
+    
+    Args:
+        images: List of base64-encoded image data URLs.
+    """
     if not images:
         return
     st.markdown(

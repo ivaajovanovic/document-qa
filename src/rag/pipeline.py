@@ -1,6 +1,12 @@
 import sys
 sys.path.append(".")
 
+"""End-to-end prototype RAG pipeline script.
+
+This file was used as a practical first pass: load chunks, build retriever,
+ask a few questions, and save outputs for manual inspection.
+"""
+
 import os
 import json
 import logging
@@ -19,7 +25,7 @@ CONTEXT_OFFSET = int(os.getenv("CONTEXT_OFFSET", "150"))
 
 def load_chunks(processed_dir: str = "./data/processed", arxiv_id: str = None) -> list[dict]:
     """
-    Load chunks from processed directory.
+    Load chunk files for one paper or the whole processed folder.
 
     Args:
         processed_dir: Path to processed chunks directory.
@@ -43,7 +49,7 @@ def load_chunks(processed_dir: str = "./data/processed", arxiv_id: str = None) -
 
 def build_full_text(chunks: list[dict]) -> dict[str, str]:
     """
-    Rekonstruiše ceo tekst papera iz chunkova po arxiv_id.
+    Reconstruct approximate full text per paper from chunk order.
 
     Args:
         chunks: List of all chunks.
@@ -62,7 +68,7 @@ def build_full_text(chunks: list[dict]) -> dict[str, str]:
 
 def expand_context(chunk: dict, full_texts: dict, offset: int = CONTEXT_OFFSET) -> str:
     """
-    Proširuje tekst chunka sa offsetom pre i posle.
+    Expand a chunk with neighboring characters to add local context.
 
     Args:
         chunk: Chunk dict sa metadata.
@@ -86,7 +92,7 @@ def expand_context(chunk: dict, full_texts: dict, offset: int = CONTEXT_OFFSET) 
 
 class RAGPipeline:
     """
-    RAG pipeline that answers questions about the paper collection.
+    Simple wrapper that exposes `build()` and `ask()` for prototype runs.
     """
 
     def __init__(self, processed_dir: str = "./data/processed"):
@@ -98,7 +104,7 @@ class RAGPipeline:
 
     def build(self, arxiv_id: str = None) -> None:
         """
-        Load chunks, generate embeddings and build hybrid index.
+        Load chunks and initialize retriever index for querying.
 
         Args:
             arxiv_id: If provided, build index only for this paper.
@@ -112,7 +118,7 @@ class RAGPipeline:
 
     def ask(self, question: str, top_k: int = 5, use_rrf: bool = True, use_offset: bool = True) -> dict:
         """
-        Answer a question using RAG.
+        Answer one question via retrieve-then-generate flow.
 
         Args:
             question: User question.

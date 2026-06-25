@@ -11,6 +11,7 @@ DEFAULT_CONFIG_ID = "config_multimodal_k10_rrf60"
 
 
 def load_all_extracted() -> list[dict]:
+    """Load all `*_extraction.json` files into a single in-memory list."""
     papers = []
     for filename in os.listdir(EXTRACTED_DIR):
         if not filename.endswith("_extraction.json"):
@@ -27,6 +28,7 @@ def load_all_extracted() -> list[dict]:
 
 
 def search_with_filter(query: str, arxiv_ids: list[str], config_id: str = DEFAULT_CONFIG_ID) -> list[dict]:
+    """Run retrieval and keep only chunks belonging to selected arXiv ids."""
     try:
         config = load_config(config_id)
         retriever = get_retriever(config)
@@ -39,6 +41,7 @@ def search_with_filter(query: str, arxiv_ids: list[str], config_id: str = DEFAUL
 
 
 def format_chunks(chunks: list[dict]) -> str:
+    """Format top retrieved chunks into readable plain text output."""
     if not chunks:
         return "No relevant content found."
     results = []
@@ -51,6 +54,7 @@ def format_chunks(chunks: list[dict]) -> str:
 
 
 def format_paper_list(papers: list[dict]) -> str:
+    """Format metadata records as bullet list for tool responses."""
     if not papers:
         return "No papers found matching filters."
     results = []
@@ -63,6 +67,7 @@ def format_paper_list(papers: list[dict]) -> str:
 
 
 def filter_papers_by_year(papers: list[dict], before_int: int, after_int: int, exact_int: int) -> list[dict]:
+    """Apply before/after/exact year filters to paper metadata."""
     filtered = []
     for p in papers:
         try:

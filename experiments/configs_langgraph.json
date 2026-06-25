@@ -22,6 +22,7 @@
     {
   "id": "config_multimodal_k10_rrf60",
   "index_id": "idx_multimodal",
+  "retriever_type": "multimodal",
   "chunk_size": 256,
   "top_k": 10,
   "rrf_k": 60,

@@ -20,6 +20,11 @@ logger = logging.getLogger(__name__)
 
 
 def route_after_parse(state: RAGState) -> str:
+    """Choose next node after parsing user input.
+
+    `/config ...` commands go to config update node.
+    All normal questions continue to decomposition.
+    """
     last_message = state["messages"][-1]
     content = last_message.content
     if isinstance(content, list):
@@ -34,6 +39,7 @@ def route_after_parse(state: RAGState) -> str:
 
 
 def route_after_decompose(state: RAGState) -> str:
+    """Route to multi-query execution only when decomposition produced >1 query."""
     sub_queries = state.get("sub_queries", [])
     if len(sub_queries) > 1:
         return "execute_sub_queries"
@@ -41,6 +47,7 @@ def route_after_decompose(state: RAGState) -> str:
 
 
 def route_after_agent(state: RAGState) -> str:
+    """If agent requested tools, go to tool node; otherwise generate answer directly."""
     last_message = state["messages"][-1]
     if hasattr(last_message, "tool_calls") and last_message.tool_calls:
         return "tools"
@@ -48,6 +55,11 @@ def route_after_agent(state: RAGState) -> str:
 
 
 def route_after_tools(state: RAGState) -> str:
+    """Decide how to respond after tool execution.
+
+    Metadata-only tools already return final text, so we skip LLM synthesis and
+    return the tool output directly. Retrieval tools continue to answer generation.
+    """
     for msg in reversed(state["messages"]):
         if hasattr(msg, "type") and msg.type == "tool":
             tool_call_id = getattr(msg, "tool_call_id", "")
@@ -66,6 +78,11 @@ def route_after_tools(state: RAGState) -> str:
 
 
 def build_graph() -> StateGraph:
+    """Construct and compile the end-to-end LangGraph workflow.
+
+    The graph uses SQLite checkpointing so conversation state survives between
+    requests for the same `thread_id`.
+    """
     graph = StateGraph(RAGState, input=InputState)
 
     graph.add_node("parse_query", parse_query_node)
@@ -124,6 +141,7 @@ def build_graph() -> StateGraph:
 
     import os
     os.makedirs("./data/cache", exist_ok=True)
+    # Shared SQLite file stores LangGraph checkpoints by thread id.
     conn = sqlite3.connect("./data/cache/chat_memory.db", check_same_thread=False)
     checkpointer = SqliteSaver(conn)
     return graph.compile(checkpointer=checkpointer)

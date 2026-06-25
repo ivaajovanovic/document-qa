@@ -13,19 +13,18 @@ OUTPUT_DIR = "./data/processed_multimodal"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-for filename in os.listdir(RAW_DIR):
-    if not filename.endswith(".pdf"):
-        continue
 
+def process_paper(filename: str) -> None:
+    """Process one PDF into multimodal chunks and save JSON output."""
     arxiv_id = filename.replace(".pdf", "")
     pdf_path = os.path.join(RAW_DIR, filename)
     figures_dir = os.path.join(FIGURES_DIR, arxiv_id)
     output_path = os.path.join(OUTPUT_DIR, f"{arxiv_id}_chunks.json")
 
-    # preskoči ako već postoji
+    # Skip already processed papers to support resumable runs.
     if os.path.exists(output_path):
         print(f"Skipping {arxiv_id} (already processed)")
-        continue
+        return
 
     print(f"Processing {arxiv_id}...")
 
@@ -55,7 +54,7 @@ for filename in os.listdir(RAW_DIR):
         print(f"  Saved to: {output_path}")
 
         if fig_chunks:
-            print(f"  Sample figures:")
+            print("  Sample figures:")
             for fc in fig_chunks[:2]:
                 print(f"    [{fc['metadata']['figure_id']}] {fc['metadata']['llm_description'][:80]}")
 
@@ -66,3 +65,14 @@ for filename in os.listdir(RAW_DIR):
         import traceback
         traceback.print_exc()
         print()
+
+
+def run_multimodal_pipeline() -> None:
+    """Iterate over all PDFs and process each paper through the multimodal pipeline."""
+    for filename in os.listdir(RAW_DIR):
+        if filename.endswith(".pdf"):
+            process_paper(filename)
+
+
+if __name__ == "__main__":
+    run_multimodal_pipeline()

@@ -10,6 +10,12 @@ from langchain_core.documents import Document
 from langchain_community.retrievers import BM25Retriever
 from src.rag.embedder import get_embeddings
 
+"""Hybrid retriever used in the first RAG iteration.
+
+It combines semantic retrieval (FAISS + embeddings) and lexical retrieval
+(BM25), then merges results with either RRF or a simple union strategy.
+"""
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -22,8 +28,10 @@ BATCH_SIZE = 50
 
 class Retriever:
     """
-    Hybrid retriever combining FAISS (cosine similarity)
-    and BM25 (keyword search) with Reciprocal Rank Fusion or union mode.
+    Retrieval engine for prototype experiments.
+
+    The class is intentionally explicit (build -> search) so behavior can be
+    inspected easily while tuning chunking/retrieval settings.
     """
 
     def __init__(self):
@@ -33,14 +41,14 @@ class Retriever:
         self.documents = []
 
     def _get_cache_dir(self, chunks: list[dict]) -> str:
-        """Generate cache directory path based on chunk content."""
+        """Create deterministic cache path from chunk text content."""
         content = json.dumps([c["text"] for c in chunks], sort_keys=True)
         hash_key = hashlib.md5(content.encode()).hexdigest()[:8]
         return os.path.join(CACHE_DIR, f"index_{hash_key}")
 
     def build_index(self, chunks: list[dict], index_name: str = None) -> None:
         """
-        Build hybrid index from chunks, with FAISS persistence.
+        Build or load a hybrid index (FAISS + BM25).
 
         Args:
             chunks: List of chunk dicts with text and metadata.
@@ -108,7 +116,7 @@ class Retriever:
         logger.info("Hybrid index built successfully")
 
     def _rrf_search(self, query: str, top_k: int, bm25_results, embedding_results) -> list[dict]:
-        """RRF fusion from BM25 and embedding results."""
+        """Fuse BM25 and embedding rankings with Reciprocal Rank Fusion."""
         scores = {}
 
         for rank, doc in enumerate(bm25_results):
@@ -139,7 +147,7 @@ class Retriever:
         ]
 
     def _union_search(self, top_k: int, bm25_results, embedding_results) -> list[dict]:
-        """Union of BM25 and embedding results without fusion."""
+        """Combine unique BM25 and embedding results without score fusion."""
         seen = set()
         combined = []
 
@@ -167,7 +175,7 @@ class Retriever:
 
     def search(self, query: str, top_k: int = TOP_K, use_rrf: bool = True) -> dict:
         """
-        Search using hybrid retrieval (BM25 + embeddings).
+        Run hybrid retrieval for a user query.
 
         Args:
             query: Search query text.

@@ -1,3 +1,9 @@
+"""CLI entry point for manual terminal chat with the RAG pipeline.
+
+This module is intended for local interactive testing and debugging.
+Backend API routes use `chat_service.py` instead.
+"""
+
 import json
 import logging
 from dotenv import load_dotenv
@@ -15,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_help_text() -> str:
+    """Build terminal help text including dynamically loaded config options."""
     with open("./experiments/configs_langgraph.json", encoding="utf-8") as f:
         configs = json.load(f)["configs"]
 
@@ -38,6 +45,7 @@ Available configs:
 
 
 def print_chunks(state: dict) -> None:
+    """Pretty-print chunks retrieved during the previous user turn."""
     retrieved = state.get("retrieved_chunks")
 
     if not retrieved:
@@ -69,7 +77,7 @@ def print_chunks(state: dict) -> None:
 
 
 def run_chat() -> None:
-    """Run interactive RAG chat in terminal."""
+    """Run interactive CLI chat loop over the LangGraph RAG pipeline."""
 
     print(get_help_text())
     print(f"Active config: {DEFAULT_CONFIG}")

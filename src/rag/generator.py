@@ -4,6 +4,12 @@ from dotenv import load_dotenv
 from langchain_ollama import ChatOllama
 from langchain_core.messages import SystemMessage, HumanMessage
 
+"""Answer generation step for a starter RAG pipeline.
+
+This module keeps generation intentionally straightforward: retrieved context
+is concatenated and sent to a chat model with a strict grounding prompt.
+"""
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -18,13 +24,16 @@ Always cite which paper the information comes from."""
 
 
 def get_generator() -> ChatOllama:
-    """Returns ChatOllama instance."""
+    """Create chat model used for final answer generation."""
     return ChatOllama(model=GENERATOR_MODEL)
 
 
 def generate_answer(question: str, context_chunks: list[dict]) -> str:
     """
-    Generate answer to question based on retrieved context chunks.
+    Generate one grounded answer from retrieved chunks.
+
+    In this early version, context is built by simply joining top chunks,
+    which is easy to debug during prototyping.
 
     Args:
         question: User question.

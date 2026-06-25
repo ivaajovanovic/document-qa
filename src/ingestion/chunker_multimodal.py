@@ -14,6 +14,11 @@ load_dotenv()
 
 
 def clean_text(text: str) -> str:
+    """Normalize raw PDF text before chunking.
+
+    Removes noisy citation patterns and collapses whitespace so chunking is
+    more stable across papers.
+    """
     text = re.sub(r'arXiv:\S+', '', text)
     text = re.sub(r'\[\d+(?:,\s*\d+)*\]', '', text)
     text = re.sub(r'[^\w\s.,;:!?()\-\'\"]+', ' ', text)
@@ -22,6 +27,7 @@ def clean_text(text: str) -> str:
 
 
 def _encode_image_base64(image_path: str) -> str | None:
+    """Read image from disk and return base64 payload for vision APIs."""
     try:
         with open(image_path, "rb") as f:
             return base64.b64encode(f.read()).decode("utf-8")
@@ -31,6 +37,7 @@ def _encode_image_base64(image_path: str) -> str | None:
 
 
 def _call_vision_llm(client, image_data: str, media_type: str, prompt: str) -> str:
+    """Call Groq vision model with image+prompt and return plain text output."""
     response = client.chat.completions.create(
         model="meta-llama/llama-4-scout-17b-16e-instruct",
         messages=[
@@ -57,9 +64,11 @@ def _call_vision_llm(client, image_data: str, media_type: str, prompt: str) -> s
 
 def _generate_figure_description(image_path: str, caption: str) -> str:
     """
-    Use multimodal LLM to generate description of figure.
-    Uses llama-4-scout on Groq (free tier).
-    Handles rate limits with automatic wait and retry.
+    Builds a short textual description for one figure.
+
+    If the vision model is available, the description is generated from the
+    image (optionally guided by caption text). If anything fails, the function
+    falls back to caption text so downstream indexing can continue.
     """
     try:
         from groq import Groq
@@ -83,6 +92,7 @@ def _generate_figure_description(image_path: str, caption: str) -> str:
             error_str = str(e)
 
             if "429" in error_str:
+                # Parse provider wait hint and retry once after cooldown.
                 wait_match = re.search(r'try again in (\d+)m([\d.]+)s', error_str)
                 if wait_match:
                     wait = int(wait_match.group(1)) * 60 + float(wait_match.group(2))
@@ -94,7 +104,7 @@ def _generate_figure_description(image_path: str, caption: str) -> str:
                         logger.warning(f"Vision LLM retry failed for {image_path}: {retry_e}")
                         return caption or "Figure from academic paper."
                 else:
-                    # nema info koliko da čeka — preskoči odmah
+                    # no wait hint available — skip immediately
                     logger.warning(f"Rate limit hit, skipping {image_path}")
                     return caption or "Figure from academic paper."
 
@@ -108,15 +118,19 @@ def _generate_figure_description(image_path: str, caption: str) -> str:
 
 def chunk_text_multimodal(pages: list[dict], metadata: dict, generate_descriptions: bool = True) -> list[dict]:
     """
-    Chunk text and figures from PDF pages.
+    Converts parsed PDF pages into retrieval-ready chunks.
+
+    For each page, this function creates:
+    - text chunks from cleaned page text
+    - figure chunks from image metadata (caption + optional LLM description)
 
     Args:
-        pages: Output from load_pdf() — list of dicts with page_num, text, images.
-        metadata: Paper metadata with title, authors, year, arxiv_id.
-        generate_descriptions: If True, use Vision LLM for figure descriptions.
+        pages: Output from ``load_pdf()`` with ``page_num``, ``text`` and ``images``.
+        metadata: Paper-level metadata copied into every chunk.
+        generate_descriptions: Enables vision-based figure descriptions.
 
     Returns:
-        List of chunks with chunk_type "text" or "figure".
+        List of chunk dictionaries with ``chunk_type`` equal to ``text`` or ``figure``.
     """
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=256,
@@ -161,6 +175,7 @@ def chunk_text_multimodal(pages: list[dict], metadata: dict, generate_descriptio
             else:
                 description = caption or "Figure from academic paper."
 
+            # Figure chunk text is caption + generated description for retrieval.
             chunk_text = f"{caption} {description}".strip() if caption else description
 
             chunks.append({
@@ -182,3 +197,7 @@ def chunk_text_multimodal(pages: list[dict], metadata: dict, generate_descriptio
             figure_index += 1
 
     return chunks
+
+
+# Alias for compatibility with old code that calls chunk_text
+chunk_text = chunk_text_multimodal

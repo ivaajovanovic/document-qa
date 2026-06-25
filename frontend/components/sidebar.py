@@ -1,10 +1,25 @@
+"""Sidebar UI for session management and configuration selection.
+
+Provides:
+- Button to create new chat sessions
+- List of previous sessions with quick-access buttons
+- Delete session functionality
+- Default retrieval configuration
+"""
+
 import streamlit as st
-from api_client import get_sessions, new_session, delete_session, get_history
+from ..api_client import get_sessions, new_session, delete_session, get_history
 
 DEFAULT_CONFIG_ID = "config_multimodal_k10_rrf60"
 
 
 def render_sidebar() -> tuple[str, str]:
+    """Render sidebar with session management and return active session info.
+    
+    Returns:
+        Tuple of (thread_id, config_id) for the active session.
+        thread_id is None if no session is selected.
+    """
     with st.sidebar:
         st.title("🔮 Document QA")
         st.caption("Academic Research Assistant")

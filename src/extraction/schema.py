@@ -2,6 +2,8 @@ from pydantic import BaseModel
 
 
 class PaperExtraction(BaseModel):
+    """Structured schema for per-paper LLM extraction output."""
+
     title: str
     title_evidence: str
     authors: list[str]

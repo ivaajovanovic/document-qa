@@ -27,7 +27,14 @@ SESSION_STATES = {}
 
 
 def _encode_image(image_path: str) -> str | None:
-    """Encode image file to base64 data URL."""
+    """Encode image file to base64 data URL for frontend display.
+    
+    Args:
+        image_path: Local file path to the image.
+        
+    Returns:
+        Data URL string (e.g., 'data:image/png;base64,...') or None if encoding fails.
+    """
     try:
         with open(image_path, "rb") as f:
             encoded = base64.b64encode(f.read()).decode("utf-8")
@@ -87,11 +94,21 @@ def _extract_images_from_state(state: dict) -> tuple[list[str], list[str]]:
 
 @router.get("/sessions")
 def list_sessions():
+    """List all active chat sessions ordered by most recent first.
+    
+    Returns:
+        List of session metadata dicts with thread_id, name, created_at, last_updated.
+    """
     return get_all_sessions()
 
 
 @router.post("/sessions/new", response_model=NewSessionResponse)
 def new_session():
+    """Create a new chat session with a unique thread_id.
+    
+    Returns:
+        NewSessionResponse with the generated thread_id for use in future requests.
+    """
     thread_id = str(uuid.uuid4())
     SESSION_STATES[thread_id] = create_initial_state(DEFAULT_CONFIG)
     return {"thread_id": thread_id}
@@ -99,6 +116,14 @@ def new_session():
 
 @router.delete("/sessions/{thread_id}")
 def remove_session(thread_id: str):
+    """Delete a chat session and its conversation history.
+    
+    Args:
+        thread_id: The session ID to delete.
+        
+    Returns:
+        Status confirmation dict.
+    """
     delete_session(thread_id)
     SESSION_STATES.pop(thread_id, None)
     return {"status": "deleted"}
@@ -106,11 +131,27 @@ def remove_session(thread_id: str):
 
 @router.get("/configs")
 def list_configs():
+    """List all available retrieval configurations.
+    
+    Returns:
+        List of config dicts with id and description for frontend selection.
+    """
     return [{"id": c["id"], "description": c["description"]} for c in get_configs()]
 
 
 @router.get("/sessions/{thread_id}/history")
 def get_history(thread_id: str):
+    """Retrieve full conversation history for a session.
+    
+    Fetches all messages and associated images for a given thread_id.
+    Restores from LangGraph checkpoints if not in memory.
+    
+    Args:
+        thread_id: Session identifier.
+        
+    Returns:
+        List of message dicts with role ('user' or 'assistant'), content, and images.
+    """
     try:
         state = SESSION_STATES.get(thread_id)
 
@@ -122,7 +163,7 @@ def get_history(thread_id: str):
             state = graph_state.values
 
         messages = state.get("messages", [])
-        # Učitaj image paths iz session_manager
+        # Load image paths from session_manager
         message_images = get_message_images(thread_id)
 
         history = []
@@ -132,7 +173,7 @@ def get_history(thread_id: str):
             if isinstance(msg, HumanMessage):
                 history.append({"role": "user", "content": msg.content, "images": []})
             elif isinstance(msg, AIMessage) and msg.content:
-                # Re-enkoduj slike iz sačuvanih paths
+                # Re-encode images from saved paths
                 paths = message_images.get(str(assistant_index), [])
                 images = [enc for p in paths if (enc := _encode_image(p))]
                 history.append({
@@ -151,6 +192,22 @@ def get_history(thread_id: str):
 
 @router.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
+    """Process a user query through the RAG chat pipeline.
+    
+    Runs the LangGraph workflow: query decomposition → agent/tool selection →
+    retrieval → LLM answer generation → figure extraction. Persists session
+    state by thread_id for multi-turn conversations.
+    
+    Args:
+        req: ChatRequest with thread_id, message, and optional config_id.
+        
+    Returns:
+        ChatResponse with generated answer, thread_id, and base64 images from
+        retrieved figure chunks (if multimodal config).
+        
+    Raises:
+        HTTPException: If RAG pipeline fails (500 status).
+    """
     try:
         thread_id = req.thread_id or str(uuid.uuid4())
         config_id = req.config_id or DEFAULT_CONFIG
@@ -180,9 +237,9 @@ def chat(req: ChatRequest):
         else:
             update_session(thread_id)
 
-        # Sačuvaj image paths uz indeks assistant poruke
+        # Save image paths using the assistant message index
         if image_paths:
-            # Broj assistant poruka = broj AI poruka u state
+            # Number of assistant messages equals number of AI messages in state
             ai_count = sum(
                 1 for m in result["state"].get("messages", [])
                 if isinstance(m, AIMessage) and m.content

@@ -7,6 +7,7 @@ MIN_CLUSTER_HEIGHT = 80
 
 
 def _get_column(block, page_width: float) -> int:
+    """Assign text block to left/right column for reading-order sorting."""
     x0 = block[0]
     return 0 if x0 < page_width / 2 else 1
 
@@ -56,21 +57,18 @@ def _extract_vector_figures(page, blocks, page_width: float) -> list[dict]:
         return []
 
     vector_images = []
+    # Kept for compatibility with earlier overlap-filtering approach.
     existing_raster_bboxes = [
         fitz.Rect(img.get("bbox", [0, 0, 0, 0]))
-        for img in []  # popunjava se iz load_pdf
+        for img in []
     ]
 
     for i, rect in enumerate(clusters):
         width = rect.width
         height = rect.height
 
-        # preskoči premale clustere
-        if width < MIN_CLUSTER_WIDTH or height < MIN_CLUSTER_HEIGHT:
-            continue
-
-        bbox = (rect.x0, rect.y0, rect.x1, rect.y1)
-        caption = _find_caption(blocks, bbox, page_width)
+            # skip clusters that are too small
+        caption = _find_caption(blocks, rect, page_width)
 
         # renderuj region stranice kao PNG
         try:
@@ -83,7 +81,7 @@ def _extract_vector_figures(page, blocks, page_width: float) -> list[dict]:
         vector_images.append({
             "img_index": f"vec_{i}",
             "xref": None,
-            "bbox": list(bbox),
+            "bbox": list(rect),
             "width": width,
             "height": height,
             "caption": caption,
@@ -95,6 +93,11 @@ def _extract_vector_figures(page, blocks, page_width: float) -> list[dict]:
 
 
 def load_pdf(pdf_path: str) -> list[dict]:
+    """Load one PDF and return per-page text + image metadata.
+
+    Output format is designed for downstream multimodal chunking:
+    each page contains plain text and a list of image dictionaries.
+    """
     doc = fitz.open(pdf_path)
     pages = []
 
@@ -172,7 +175,7 @@ def extract_images_to_disk(pdf_path: str, pages: list[dict], output_dir: str) ->
         for img in page_data["images"]:
             try:
                 if img.get("is_vector"):
-                    # vector — već imamo PNG bytes
+                    # vector — already have PNG bytes
                     filename = f"page{page_data['page_num']}_vec{img['img_index']}.png"
                     filepath = os.path.join(output_dir, filename)
                     with open(filepath, "wb") as f:
@@ -192,6 +195,7 @@ def extract_images_to_disk(pdf_path: str, pages: list[dict], output_dir: str) ->
                     img["image_path"] = filepath
 
             except Exception as e:
+                # Missing path is tolerated; downstream chunking can still proceed.
                 img["image_path"] = None
 
     doc.close()

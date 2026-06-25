@@ -13,11 +13,12 @@ logger = logging.getLogger(__name__)
 
 _agent = None
 
-# Tools koji vraćaju plain text metadata (ne RAG chunkove)
+# Tools that already return final text answers (metadata lookup).
 METADATA_TOOLS = {"list_papers_metadata", "get_paper_authors", "search_papers_by_year"}
 
 
 def get_agent():
+    """Create and cache tool-enabled chat model used by the agent node."""
     global _agent
     if _agent is None:
         llm = ChatGroq(
@@ -29,6 +30,7 @@ def get_agent():
 
 
 def _get_chat_history(state: RAGState, n: int = 6) -> str:
+    """Build compact text history used for follow-up query rewriting."""
     history_messages = state["messages"][:-1][-n:]
     history = ""
     for msg in history_messages:
@@ -40,6 +42,10 @@ def _get_chat_history(state: RAGState, n: int = 6) -> str:
 
 
 def parse_query_node(state: RAGState) -> RAGState:
+    """Parse lightweight command syntax from user input.
+
+    Currently supports `/config <id>` to switch retrieval settings.
+    """
     if not state.get("config_id"):
         state["config_id"] = "config_multimodal_k10_rrf60"
 
@@ -64,6 +70,11 @@ def parse_query_node(state: RAGState) -> RAGState:
 
 
 def decompose_query_node(state: RAGState) -> RAGState:
+    """Turn the question into one or more focused search queries.
+
+    Complex/comparative questions are split into multiple sub-queries.
+    Metadata questions (year/author/company) are kept as a single query.
+    """
     last_message = state["messages"][-1]
     content = last_message.content
     if isinstance(content, list):
@@ -138,27 +149,8 @@ Respond with ONLY a JSON array of strings:
     return state
 
 
-def retrieve_node(state: RAGState) -> RAGState:
-    last_message = state["messages"][-1]
-    query = last_message.content.strip()
-
-    try:
-        config = load_config(state["config_id"])
-        retriever = get_retriever(config)
-        search_results = retriever.search(query, top_k=config["top_k"], use_rrf=True)
-        state["retrieved_chunks"] = search_results
-        state["error"] = None
-        logger.info(f"Retrieved {len(search_results['hybrid'])} chunks")
-
-    except Exception as e:
-        logger.error(f"Retrieval failed: {e}")
-        state["error"] = str(e)
-        state["retrieved_chunks"] = None
-
-    return state
-
-
 def generate_node(state: RAGState) -> RAGState:
+    """Generate answer from retrieved chunks using the RAG generator."""
     if state.get("error") or not state.get("retrieved_chunks"):
         state["messages"] = [AIMessage(content=f"Error: {state.get('error', 'No chunks retrieved')}")]
         return state
@@ -183,6 +175,11 @@ def generate_node(state: RAGState) -> RAGState:
 
 
 def agent_node(state: RAGState) -> RAGState:
+    """Decide which tool(s) to call based on user intent.
+
+    Retries model/tool decision up to three times and falls back to direct
+    `search_papers` call if tool-selection repeatedly fails.
+    """
     max_retries = 3
 
     for attempt in range(max_retries):
@@ -239,6 +236,7 @@ Do NOT use tools for greetings.""")
 
 
 def update_config_node(state: RAGState) -> RAGState:
+    """Return a user-facing message after `/config` command handling."""
     if state.get("error"):
         state["messages"] = [AIMessage(content=f"Error: {state['error']}")]
     else:
@@ -261,6 +259,7 @@ def update_config_node(state: RAGState) -> RAGState:
 
 
 def direct_answer_node(state: RAGState) -> RAGState:
+    """Return tool text directly when no extra synthesis is needed."""
     tool_result = ""
     for msg in reversed(state["messages"]):
         if hasattr(msg, "type") and msg.type == "tool":
@@ -277,6 +276,11 @@ def direct_answer_node(state: RAGState) -> RAGState:
 
 
 def tools_generate_node(state: RAGState) -> RAGState:
+    """Generate final natural-language answer from tool outputs.
+
+    This node merges tool contexts, asks an LLM to answer strictly from those
+    contexts, then appends formatted sources when present.
+    """
     try:
         tool_results = []
         question = ""
@@ -294,6 +298,7 @@ def tools_generate_node(state: RAGState) -> RAGState:
                 question = msg.content
                 break
 
+        # Store tool text as pseudo-chunks so UI/debug flows can inspect context.
         state["retrieved_chunks"] = {"hybrid": raw_chunks}
 
         if not tool_results:
@@ -416,6 +421,7 @@ Rules:
 
 
 def execute_sub_queries_node(state: RAGState) -> RAGState:
+    """Run decomposed sub-queries one by one and store each tool result."""
     from src.langgraph_rag.tools import search_papers
     from langchain_core.messages import ToolMessage
 

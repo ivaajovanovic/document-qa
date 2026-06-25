@@ -3,6 +3,12 @@ import logging
 from dotenv import load_dotenv
 from langchain_ollama import OllamaEmbeddings
 
+"""Embedding helpers for an initial RAG prototype.
+
+The goal here is to keep embedding setup simple so retrieval experiments are
+easy to run and reason about.
+"""
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -12,20 +18,22 @@ EMBED_MODEL = os.getenv("EMBED_MODEL", "mxbai-embed-large")
 
 def get_embeddings() -> OllamaEmbeddings:
     """
-    Returns OllamaEmbeddings instance.
+    Create the embedding model object used across retriever code.
+
+    Keeping this in one place makes model swaps easy while experimenting.
     """
     return OllamaEmbeddings(model=EMBED_MODEL)
 
 
 def embed_chunks(chunks: list[dict]) -> list[dict]:
     """
-    Generate embeddings for all chunks.
+    Attach vector embeddings to chunk dictionaries.
 
     Args:
         chunks: List of chunk dicts with "text" field.
 
     Returns:
-        Same chunks with "embedding" field added.
+        New list where each chunk includes an ``embedding`` field.
     """
     embeddings = get_embeddings()
     texts = [chunk["text"] for chunk in chunks]

@@ -10,6 +10,12 @@ from langchain_core.documents import Document
 from langchain_community.retrievers import BM25Retriever
 from src.rag.embedder import get_embeddings
 
+"""Multimodal variant of the starter hybrid retriever.
+
+This version adds lightweight figure-priority behavior for visual queries,
+while keeping the same FAISS+BM25 structure as the base retriever.
+"""
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -19,15 +25,7 @@ RRF_K = int(os.getenv("RRF_K", "60"))
 CACHE_DIR = "./data/cache"
 BATCH_SIZE = 50
 
-# Reči koje sugerišu da korisnik traži vizuelni sadržaj
-VISUAL_KEYWORDS = {
-    "figure", "figures", "diagram", "diagrams", "image", "images",
-    "illustration", "illustrations", "picture", "pictures", "plot", "plots",
-    "chart", "charts", "shows", "shown", "depicted", "illustrated",
-    "architecture", "visualization", "schema", "overview", "pipeline"
-}
-
-FIGURE_BOOST = 1.5  # Multiplikator za figure chunkove kad je vizuelni upit
+FIGURE_BOOST = 1.2  # Modest boost for figure chunks in a multimodal index
 
 
 class Retriever:
@@ -47,11 +45,6 @@ class Retriever:
         content = json.dumps([c["text"] for c in chunks], sort_keys=True)
         hash_key = hashlib.md5(content.encode()).hexdigest()[:8]
         return os.path.join(CACHE_DIR, f"index_{hash_key}")
-
-    def _is_visual_query(self, query: str) -> bool:
-        """Check if query is asking for visual/figure content."""
-        query_words = set(query.lower().split())
-        return bool(query_words & VISUAL_KEYWORDS)
 
     def build_index(self, chunks: list[dict], index_name: str = None) -> None:
         """
@@ -121,10 +114,9 @@ class Retriever:
     def _rrf_search(self, query: str, top_k: int, bm25_results, embedding_results) -> list[dict]:
         """
         RRF fusion from BM25 and embedding results.
-        Applies figure boosting when query contains visual keywords.
+        Applies a modest boost to figure chunks in the multimodal index.
         """
         scores = {}
-        visual_query = self._is_visual_query(query)
 
         for rank, doc in enumerate(bm25_results):
             key = doc.page_content
@@ -138,12 +130,11 @@ class Retriever:
                 scores[key] = {"doc": doc, "score": 0.0}
             scores[key]["score"] += 1 / (rank + RRF_K)
 
-        # Figure boosting za vizuelne upite
-        if visual_query:
-            for key, item in scores.items():
-                if item["doc"].metadata.get("chunk_type") == "figure":
-                    item["score"] *= FIGURE_BOOST
-            logger.info(f"Visual query detected — applying figure boost x{FIGURE_BOOST}")
+        # Apply a modest boost to figure chunks in multimodal retrieval.
+        # This keeps figure metadata visible while preserving BM25/embedding relevance.
+        for item in scores.values():
+            if item["doc"].metadata.get("chunk_type") == "figure":
+                item["score"] *= FIGURE_BOOST
 
         sorted_results = sorted(
             scores.values(),
