@@ -2,13 +2,6 @@
 
 Hybrid RAG system for question answering over PDF documents with multimodal retrieval.
 
-## What it does
-
-- Answer questions over PDF documents
-- Multimodal retrieval: text + figures/tables
-- Chat history and session management
-- Switch retrieval configuration from the sidebar
-
 ## Quick Start
 
 1. Open the project root:
@@ -26,17 +19,35 @@ poetry install
 GROQ_API_KEY=your_groq_api_key_here
 ```
 
-4. Start the backend:
+4. Prepare the dataset:
+```bash
+poetry run python scripts/fetch_metadata.py
+```
+
+5. Download arXiv PDFs into `data/raw/arxiv_papers/`.
+
+6. Run multimodal preprocessing:
+```bash
+poetry run python src/ingestion/run_multimodal.py
+```
+
+7. Build search indexes:
+```bash
+poetry run python scripts/build_indexes.py
+poetry run python scripts/build_multimodal_index.py
+```
+
+8. Start the backend API:
 ```bash
 poetry run uvicorn src.api.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-5. Start the frontend:
+9. Start the frontend:
 ```bash
 poetry run streamlit run frontend/app.py
 ```
 
-6. Open:
+10. Open in a browser:
 - Frontend: `http://localhost:8501`
 - API docs: `http://localhost:8000/docs`
 
@@ -108,7 +119,8 @@ poetry run streamlit run frontend/app.py
 - `scripts/build_indexes.py` — build text retrieval indexes
 - `scripts/build_multimodal_index.py` — build multimodal index
 - `scripts/fetch_metadata.py` — fetch metadata for papers
-- 
+- `scripts/generate_qa.py` — generate Q&A pairs
+
 ## Configuration
 
 All retrieval configs are stored in `experiments/configs_langgraph.json`.
@@ -155,42 +167,6 @@ This project is built from arXiv papers and metadata. The pipeline converts PDFs
    - `scripts/build_indexes.py` loads processed chunk files and builds indexes according to `experiments/configs_langgraph.json`.
    - `scripts/build_multimodal_index.py` specifically loads `data/processed_multimodal/` and builds a multimodal FAISS/BM25 index.
 
-### Running preprocessing
-
-1. Fetch metadata:
-```bash
-poetry run python scripts/fetch_metadata.py
-```
-
-2. Download arXiv PDFs into `data/raw/arxiv_papers/`.
-
-3. Generate multimodal chunks:
-```bash
-poetry run python src/ingestion/run_multimodal.py
-```
-
-4. Build indexes:
-```bash
-poetry run python scripts/build_indexes.py
-poetry run python scripts/build_multimodal_index.py
-```
-
-## Running the system
-
-1. Start the backend API:
-```bash
-poetry run uvicorn src.api.main:app --reload --host 127.0.0.1 --port 8000
-```
-
-2. Start the Streamlit frontend:
-```bash
-poetry run streamlit run frontend/app.py
-```
-
-3. Open in a browser:
-- Frontend: `http://localhost:8501`
-- API docs: `http://localhost:8000/docs`
-
 ## Notes
 
 - The multimodal pipeline is designed to index both text and figure content.
@@ -203,4 +179,5 @@ poetry run streamlit run frontend/app.py
 GROQ_API_KEY=your_groq_api_key_here
 EMBED_MODEL=mxbai-embed-large
 ```
+
 
